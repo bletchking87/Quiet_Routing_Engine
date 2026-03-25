@@ -45,7 +45,7 @@ def get_noise_column():
 k_label = st.select_slider(       #Tuning parameter to adjust influence of noise on the overall cost. 
         'Walking preference',
         options=['Fastest', 'Balanced', 'Quiet', 'Serene'],
-        value='Fastest' #Hardcoded starting point, with the slider in use this will change, however. 
+        value='Balanced' #Hardcoded starting point, with the slider in use this will change, however. 
     )
 mapping = {
         'Fastest': 0.5,
@@ -92,14 +92,8 @@ def apply_real_noise_weights(_edges, gpkg_path, k):     #Have put _edges so that
 
 edges['weighted_cost'] = apply_real_noise_weights(edges, gpkg_path, k) #Column of weighted costs 
 
-#print(edges.sort_values('weighted_cost', ascending=False)[['highway', 'length', 'weighted_cost']].head())
-#print(gpd.read_file(gpkg_path, layer='2017_Tramer_Mapa_Estrategic_Soroll_BCN'))
 
 
-print(edges['weighted_cost'].isna().sum())
-print(f"Total edges: {len(edges)}")
-
-"""
 
 # 6. ------------------------------------ Routing Comparison ------------------------------------
 
@@ -133,8 +127,7 @@ fig, ax = ox.plot_graph_routes(G, [route_fast, route_quiet],
                                route_linewidth=4, node_size=0)
 plt.show()
 
-print(f"k value: {k}")
-"""
+
 """
 INTERFACE 
 #Folium 
