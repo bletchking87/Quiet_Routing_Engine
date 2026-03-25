@@ -5,49 +5,73 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime
 import pytz
-import tqdm
 import streamlit as st
 
 # 1. SETTINGS
 ox.settings.use_cache = True
 ox.settings.requests_timeout = 300
-# 2. Extract the 'Walk' network for St Albans
 
 
+# 2. Extracting the 'Walk' network for BCN
 print("Scanning Barcelona...")
-st.cache
 gpkg_path = "/Users/Rhys/Quiet_Routing_Engine/noise_data_2017.gpkg"
 G = ox.graph_from_address("Arc de Triomf, Barcelona, Spain", dist=3000, network_type="walk")
 
+#ox.save_graphml(G, filepath="barcelona_walk.graphml")
 
-ox.save_graphml(G, filepath="barcelona_walk.graphml")
 # 3. Unpack the edges - leaving nodes aside for now, as we are more interested in roads than intersections for this project.
 _, edges = ox.graph_to_gdfs(G) #Roads (edges) into a GeoDataFrame.
-ox.plot_graph(G)
 
 
-"""
-# 5. Counts how many of each road type exist in BCN
-road_profile = edges['highway'].value_counts()
-print("\n--- BARCELONA ROAD TYPES ---")
-print(road_profile)
-print(f"\n Total roads: {len(edges)}")
-print("Applying noise weights to roads...")
-"""
+#FETCHING TIME IN BARCELONA - HARDCODING LOCAL TIME TO AVOID ISSUES WITH TIMEZONE CONFIGURATION IN DIFFERENT ENVIRONMENTS. 
+#FOR A MUlTICITY APPLICATION, THIS WOULD NEED TO BE CONFIGURED TO FETCH LOCAL TIME BASED ON THE CITY IN QUESTION.
+def get_local_time():
+    tz = pytz.timezone('Europe/Madrid')
+    bcn_hour = datetime.now(tz).hour
+    return bcn_hour
+# Selecting Noise Column Based on time
+def get_noise_column():
+    hour = get_local_time()
+    if 7 <= hour < 19: 
+        col = 'TOTAL_D'
+    elif 19 <= hour < 23:
+        col = 'TOTAL_E'
+    else: 
+        col = 'TOTAL_N'
+    print(f"Applying weighting for hour {[hour]}, using column {col}")
+    return col
+
+# -------------------- SLIDER FOR NOISE SENSITIVITY (k) --------------------
+k_label = st.select_slider(       #Tuning parameter to adjust influence of noise on the overall cost. 
+        'Walking preference',
+        options=['Fastest', 'Balanced', 'Quiet', 'Serene'],
+        value='Fastest' #Hardcoded starting point, with the slider in use this will change, however. 
+    )
+mapping = {
+        'Fastest': 0.5,
+        'Balanced': 1.5,
+        'Quiet': 3,
+        'Serene': 5
+    }
+k = mapping[k_label]
+
 
 
 # --- PHASE 3: GeoPackage-based and time sensitive noise ratings ---
 @st.cache_data
-def apply_real_noise_weights(edges, gpkg_path):
+def apply_real_noise_weights(_edges, gpkg_path, k):     #Have put _edges so that it doesn't cache. 
     noise_gdf = gpd.read_file(gpkg_path, layer='2017_Tramer_Mapa_Estrategic_Soroll_BCN')  
-    
+
+
     # CRS Alignment (Degrees vs Meters in different maps (OpenData BCN vs. OSMNX) need to be homogenised)
-    noise_gdf = noise_gdf.to_crs(edges.crs)
+    noise_gdf = noise_gdf.to_crs(_edges.crs)
     bcn_crs = "EPSG:25831" # UTM Zone 31N, commonly used for Barcelona. RAN INTO DATA CONFIGURATION ERRORS AND NEED TO HOMOGENISE.
-    # Spatial Join (Snapping the closest noise data to the streets)
-    edges_projected = edges.to_crs(bcn_crs)
+   
+   
+   # Spatial Join (Snapping closest noise data to the streets)
+    edges_projected = _edges.to_crs(bcn_crs)
     noise_projected = noise_gdf.to_crs(bcn_crs)
-    # Print the 5 loudest street segments found
+    
     
     joined = gpd.sjoin_nearest(
         edges_projected, 
@@ -55,58 +79,29 @@ def apply_real_noise_weights(edges, gpkg_path):
         how="left", 
         distance_col="dist" 
     )
+
     joined = joined[~joined.index.duplicated(keep='first')] 
     
-     # 1. Converting column to floats - they're stored as strings in the GeoPackage.
-    noise_values = pd.to_numeric(joined[get_noise_column], errors='coerce').fillna(75) # Assuming 75 dB for streets without noise data, which is a conservative estimate to avoid false positives.
+     # Converting column to floats - they're stored as strings in the GeoPackage. Added regex too to find upper bound of noise range.
+    noise_values = pd.to_numeric(joined[get_noise_column()].str.extract("- (\d+)")[0], errors='coerce').fillna(75) # Assuming 75 dB for streets without noise data, which is a conservative estimate to avoid false positives.
+
+    edges_projected['noise_values'] = noise_values
+    noise_normalised = (noise_values - noise_values.min()) / (noise_values.max() - noise_values.min()) # Normalising values between 0 and 1. 
     
+    return edges_projected['length'] * (noise_normalised) ** k # Using a power function because 75dB is twice as loud as 65 dB to a human.
+
+edges['weighted_cost'] = apply_real_noise_weights(edges, gpkg_path, k) #Column of weighted costs 
+
+#print(edges.sort_values('weighted_cost', ascending=False)[['highway', 'length', 'weighted_cost']].head())
+#print(gpd.read_file(gpkg_path, layer='2017_Tramer_Mapa_Estrategic_Soroll_BCN'))
 
 
-#FETCHING TIME IN BARCELONA - HARDCODING LOCAL TIME TO AVOID ISSUES WITH TIMEZONE CONFIGURATION IN DIFFERENT ENVIRONMENTS. 
-#THIS IS FOR DEMONSTRATION PURPOSES ONLY, AND WILL BE REPLACED WITH A DYNAMIC SOLUTION IN PRODUCTION.
-    def get_local_time():
-        tz = pytz.timezone('Europe/Madrid')
-        bcn_time = datetime.now(tz)
-        return bcn_time.strftime("%Y-%m-%d %H:%M:%S")
-# Selecting Noise Column Based on time
-    def get_noise_column():
-        hour = get_local_time()
-        if 7 <= hour < 19: 
-            col = 'TOTAL_D'
-        elif 19 <= hour < 23:
-            col = 'TOTAL_E'
-        else: 
-            col = 'TOTAL_N'
-        print(f"Applying weighting for hour {[hour]}, using column {col}")
+print(edges['weighted_cost'].isna().sum())
+print(f"Total edges: {len(edges)}")
 
-    
-   
+"""
 
-    k_label = st.select_slider(       #Tuning parameter to adjust influence of noise on the overall cost. 
-        'Walking preference',
-        options=['Fastest', 'Balanced', 'Quiet', 'Serene'],
-        value='Balanced' #Hardcoded starting point, with the slider in use this will change, however. 
-    )
-    mapping = {
-        'Fastest': 0.5,
-        'Balanced': 1.5,
-        'Quiet': 3,
-        'Serene': 5
-    }
-    k = mapping[k_label]
-    return edges_projected['length'] * (noise_values ** k) #Squared values because 75dB is twice as loud as 65 dB to a human.
-
-edges['weighted_cost'] = apply_real_noise_weights(edges, gpkg_path) #Column of weighted costs 
-
-print(edges.sort_values('weighted_cost', ascending=False)[['highway', 'length', 'weighted_cost']].head())
-print(gpd.read_file(gpkg_path, layer='2017_Tramer_Mapa_Estrategic_Soroll_BCN'))
-
-
-
-
-
-
-# 6. Routing Comparison
+# 6. ------------------------------------ Routing Comparison ------------------------------------
 
 weights_dict = edges['weighted_cost'].to_dict() #Precautionary step to ensure weights are formatted such that they can be pushed back easily to graph.
 
@@ -122,13 +117,15 @@ print("Calculating routes...")
 route_fast = ox.shortest_path(G, orig, dest, weight='length')
 route_quiet = ox.shortest_path(G, orig, dest, weight='weighted_cost')
 
-""" CHECK LENGTHS BEFORE PLOTTING.
-len_fast = sum(ox.utils_graph.get_route_edge_attributes(G, route_fast, 'length'))
-len_quiet = sum(ox.utils_graph.get_route_edge_attributes(G, route_quiet, 'length'))
+# CHECK LENGTHS BEFORE PLOTTING.
+route_fast_edges = ox.routing.route_to_gdf(G, route_fast)
+len_fast = route_fast_edges['length'].sum()
+route_quiet_edges = ox.routing.route_to_gdf(G, route_quiet)
+len_quiet = route_quiet_edges['length'].sum()
 
 print(f"Fast Route: {len_fast:.2f} meters")
 print(f"Quiet Route: {len_quiet:.2f} meters")
-"""
+
 # 7. Visualize: Red = Fast, Green = Quiet
 print("Plotting results...")
 fig, ax = ox.plot_graph_routes(G, [route_fast, route_quiet], 
@@ -136,9 +133,8 @@ fig, ax = ox.plot_graph_routes(G, [route_fast, route_quiet],
                                route_linewidth=4, node_size=0)
 plt.show()
 
-
-
-
+print(f"k value: {k}")
+"""
 """
 INTERFACE 
 #Folium 
