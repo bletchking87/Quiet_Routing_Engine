@@ -93,8 +93,6 @@ def set_noise_constraints(noise_normalised, edges_projected, k):
 noise_normalised, edges_projected = map_data_join(edges, gpkg_path)
 weighted_cost = set_noise_constraints(noise_normalised, edges_projected, k) #Applying the noise constraints to the edges, with the selected k value.
 
-st.write(f"k value: {k}")
-
 # 6. ------------------------------------ Routing Comparison ------------------------------------
 edges['weighted_cost'] = weighted_cost  #Converting back to a Series of values to push back to the graph. 
 weights_dict = edges['weighted_cost'].to_dict() #Precautionary step to ensure weights are formatted such that they can be pushed back easily to graph.
@@ -108,7 +106,14 @@ start_point = ox.geocoder.geocode(start_input)
 end_input = st.text_input("Enter your destination (e.g., 'Sagrada Família, Barcelona'):", value="Sagrada Família, Barcelona")
 end_point = ox.geocoder.geocode(end_input)
 
-if start_input and end_input:
+
+# ------------ ROUTING LOGIC AND VISUALISATION -------------
+if st.button("Find route"):
+    if not start_input or not end_input:
+        st.error("Please enter both a start and end point.")
+        
+    else:
+        # your routing logic here
     orig = ox.distance.nearest_nodes(G, X=start_point[1], Y=start_point[0])
     dest = ox.distance.nearest_nodes(G, X=end_point[1], Y=end_point[0])
 
