@@ -159,22 +159,31 @@ if st.button("Find route"):
     fast_time = (len_fast / 1000 * 12).round() #Assuming an average walking speed of 5 km/h, which is 12 minutes per km. This is a simplification and could be improved by using more granular speed data based on road type, slope, etc.
     quiet_time = (len_quiet / 1000 * 12).round()
 
-    st.subheader("Route Comparison")
     st.metric(label="Fast Route", value=f"{len_fast:.2f} meters. Estimated time: {fast_time} minutes")
     st.metric(label=f"Quiet Route, {k_label} mode", value=f"{len_quiet:.2f} meters. Estimated time: {quiet_time} minutes.")
-    """
-    "The quiet route, based on {k_label} mode, has an average noise level of {quiet_road_noise} dB, compared to {avoided_road_noise} dB on the main roads avoided. 
-    The quiet route avoids the following main roads: {', '.join(main_roads_avoided)}, and will take you {(quiet_time - fast_time)/fast_time*100:.0f}% longer
-    than the fastest route, but with a significantly quieter walking experience."
-    """
+    
+    user_prompt = f"""Fast route time: {fast_time} mins. Quiet route time: {quiet_time} mins.
+        Average noise on avoided roads: {avoided_road_noise} dB.
+        Average noise on quiet route: {quiet_road_noise} dB.
+        Main roads avoided: {', '.join(main_roads_avoided[:3])}."""
+    
     response = client.messages.create(
-    model="claude-sonnet-4.5",
-    max_tokens=1024,
-    system="You are a helpful walking assistant.",
-    messages=[
-        {"role": "user", "content": "Write a Python function to reverse a string."}
+        model="claude-sonnet-4-5-20251001",
+        max_tokens=1024,
+        system=f"""You are a helpful assistant that provides a concise summary of the features of a quietness-optimised route through barcelona, 
+        in contrast to the fastest route. The user has chosen {k_label} as their mode. 
+        Focus on the noise levels, roads avoided, and time difference in your summary. 
+        Note that decibels are logarithmic — a 10dB reduction is perceived as approximately half as loud.
+        Avoid giving specific percentages and instead use qualitative language like "noticeably quieter" or "significantly reduced".
+        Reflect this in your summary so the user understands the real impact of the noise difference."
+        2-3 sentences maximum.""",
+        messages=[
+        {"role": "user", "content": user_prompt}
     ]
-)
+    )
+
+    st.write(response.content[0].text)
+    
 
     #Plotting routes using OSMNX's built-in plotting function, with custom colours and line widths for better visibility. Nodes are hidden for a cleaner look.
     fig, ax = ox.plot_graph_routes(G, [route_fast, route_quiet], 
