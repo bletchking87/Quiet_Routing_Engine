@@ -6,6 +6,8 @@ from datetime import datetime
 import pytz
 import streamlit as st
 import anthropic
+import folium 
+import streamlit_folium as st_folium
 
 # ------------------------ SETTINGS ------------------------
 ox.settings.use_cache = True
@@ -26,11 +28,12 @@ def init_session_state():#Turned into a function as had too many variables to in
         'edges_projected': None,
         'noise_normalised': None,
         'route_fast_edges': None,
+        'mid_lat': 41.3851, # Default to Barcelona center
+        'mid_lon': 2.1734 # Default to Barcelona center
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
-
 init_session_state()
 
 
@@ -156,8 +159,9 @@ if st.sidebar.button("Find route"):
 
 
         st.info("Loading graph data for the specified area...")#Better UX
-        mid_lat = (start_point[0] + end_point[0]) / 2
-        mid_lon = (start_point[1] + end_point[1]) / 2
+        st.session_state.mid_lat = (start_point[0] + end_point[0]) / 2
+        st.session_state.mid_lon = (start_point[1] + end_point[1]) / 2
+
         distance = ox.distance.great_circle(start_point[0], start_point[1], end_point[0], end_point[1])
         G, edges = load_graph(f"{mid_lat},{mid_lon}", dist=int(distance/2) + 500)
         
@@ -177,7 +181,11 @@ if st.sidebar.button("Find route"):
 if st.session_state.orig is not None:
     route_quiet = ox.shortest_path(st.session_state.G, st.session_state.orig, st.session_state.dest, weight='weighted_cost')
     route_quiet_edges = ox.routing.route_to_gdf(st.session_state.G, route_quiet)
-    
+
+    route_fast_gdf = ox.routing.route_to_gdf(st.session_state.G, st.session_state.route_fast).to_crs("EPSG:4326") #Folium needs lat/lon coordinates, so we convert the CRS back to EPSG:4326 -
+    route_quiet_gdf = ox.routing.route_to_gdf(st.session_state.G, route_quiet).to_crs("EPSG:4326")                #for both routes to ensure they are in the same format for plotting.
+
+
     
     #Finding which roads are in the quiet but not in the fast route.
     quiet_road_names = route_quiet_edges['name'].explode().unique().tolist()
@@ -197,11 +205,13 @@ if st.session_state.orig is not None:
     st.metric(label="Fast Route", value=f"{len_fast/1000:.1f} km. Estimated time: {int(fast_time)} minutes")
     st.metric(label=f"Quiet Route, {k_label} mode", value=f"{len_quiet/1000:.1f} km. Estimated time: {int(quiet_time)} minutes.")
  
-# -------------- Plotting routes using OSMNX's built-in plotting function ------------------
-    fig, ax = ox.plot_graph_routes(st.session_state.G, [st.session_state.route_fast, route_quiet], 
-                                route_colors=['r', 'g'], 
-                                route_linewidth=4, node_size=0)
-    st.pyplot(fig)
+# -------------- Plotting routes using Folium for interactive map ------------------
+   
+    m = folium.Map(location=[mid_lat, mid_lon], zoom_start=15, tiles="cartodbpositron")
+    folium.GeoJson(st.session_state.route_fast_edges, name="Fast Route", style_function=lambda x: {'color': 'red', 'weight': 4, 'opacity': 0.7}).add_to(m)
+    folium.GeoJson(route_quiet_edges, name="Quiet Route", style_function=lambda x: {'color': 'green', 'weight': 5, 'opacity': 0.9}).add_to(m)
+    folium.LayerControl().add_to(m)
+    st_folium(m, width=700, height=500, returned_objects=[]) #returned objects means we don't have to process user interactions with the map. 
 
     if st.session_state.last_k_label != k_label or st.session_state.last_route != route_quiet: #Only call the LLM if the user has changed their preference or the quiet route. 
         # calling LLM for summary
