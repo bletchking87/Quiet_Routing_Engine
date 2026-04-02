@@ -155,10 +155,10 @@ if st.sidebar.button("Find route"):
             st.stop()
 
         
-        north = max(start_point[0], end_point[0]) + 0.01 #0.01 degrees is roughly 1km, allowing for ample expansion of the map for longer routes. 
-        south = min(start_point[0], end_point[0]) - 0.01
-        east = max(start_point[1], end_point[1]) + 0.01
-        west = min(start_point[1], end_point[1]) - 0.01
+        north = max(start_point[0], end_point[0]) + 0.005 #0.005 degrees is roughly 500m, allowing for ample expansion of the map for longer routes. 
+        south = min(start_point[0], end_point[0]) - 0.005
+        east = max(start_point[1], end_point[1]) + 0.005
+        west = min(start_point[1], end_point[1]) - 0.005
 
         st.info("Loading graph data for the specified area...")#Better UX
         bbox = (north, south, east, west)
