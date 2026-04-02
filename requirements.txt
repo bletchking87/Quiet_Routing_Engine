@@ -53,4 +53,6 @@ typing_extensions==4.15.0
 tzdata==2025.3
 urllib3==2.6.3
 folium==0.20.0
+streamlit_folium==0.27.1
 anthropic==0.86.0
+
