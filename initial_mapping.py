@@ -7,7 +7,7 @@ import pytz
 import streamlit as st
 import anthropic
 import folium 
-import streamlit_folium as st_folium
+from streamlit_folium import st_folium
 
 # ------------------------ SETTINGS ------------------------
 ox.settings.use_cache = True
