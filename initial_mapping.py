@@ -207,7 +207,7 @@ if st.session_state.orig is not None:
  
 # -------------- Plotting routes using Folium for interactive map ------------------
    
-    m = folium.Map(location=[mid_lat, mid_lon], zoom_start=15, tiles="cartodbpositron")
+    m = folium.Map(location=[st.session_state.mid_lat, st.session_state.mid_lon], zoom_start=15, tiles="cartodbpositron")
     folium.GeoJson(st.session_state.route_fast_edges, name="Fast Route", style_function=lambda x: {'color': 'red', 'weight': 4, 'opacity': 0.7}).add_to(m)
     folium.GeoJson(route_quiet_edges, name="Quiet Route", style_function=lambda x: {'color': 'green', 'weight': 5, 'opacity': 0.9}).add_to(m)
     folium.LayerControl().add_to(m)
