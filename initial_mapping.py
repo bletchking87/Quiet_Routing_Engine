@@ -163,7 +163,7 @@ if st.sidebar.button("Find route"):
         st.session_state.mid_lon = (start_point[1] + end_point[1]) / 2
 
         distance = ox.distance.great_circle(start_point[0], start_point[1], end_point[0], end_point[1])
-        G, edges = load_graph(f"{mid_lat},{mid_lon}", dist=int(distance/2) + 500)
+        G, edges = load_graph(f"{st.session_state.mid_lat},{st.session_state.mid_lon}", dist=int(distance/2) + 500)
         
 
         
