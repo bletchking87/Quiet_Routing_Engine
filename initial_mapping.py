@@ -110,7 +110,7 @@ def map_data_join(_edges, gpkg_path, noise_column):     #Have put "_edges" so th
     joined = joined[~joined.index.duplicated(keep='first')] 
     
     # Converting column to floats as they're stored as strings in the GeoPackage. Added regex to find upper bound of noise range, and take only two digits.
-    noise_values = pd.to_numeric(joined[noise_column].str.extract("- (\d+)")[0], errors='coerce').fillna(75) # Assuming 75 dB for streets without noise data, which is a conservative estimate to avoid false positives.
+    noise_values = pd.to_numeric(joined[noise_column].str.extract(r"- (\d+)")[0], errors='coerce').fillna(75) # Assuming 75 dB for streets without noise data, which is a conservative estimate to avoid false positives.
 
     edges_projected['noise_values'] = noise_values
     noise_normalised = (noise_values - noise_values.min()) / (noise_values.max() - noise_values.min()) # Normalising values between 0 and 1. 
@@ -185,7 +185,7 @@ if st.session_state.orig is not None:
     #Finding which roads are in the quiet but not in the fast route.
     quiet_road_names = route_quiet_edges['name'].explode().unique().tolist()
     fast_road_names = st.session_state.route_fast_edges['name'].explode().unique().tolist()
-    main_roads_avoided = [road for road in fast_road_names if road not in quiet_road_names and road is not None]
+    main_roads_avoided = [road for road in fast_road_names if road not in quiet_road_names and road is not None and isinstance(road, str)] #Some roads have no names.
     
     fast_noise = st.session_state.edges_projected.loc[st.session_state.route_fast_edges.index, 'noise_values'].mean().round() 
     quiet_noise = st.session_state.edges_projected.loc[route_quiet_edges.index, 'noise_values'].mean().round()
