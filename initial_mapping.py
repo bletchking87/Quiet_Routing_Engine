@@ -30,10 +30,6 @@ def init_session_state():#Turned into a function as had too many variables to in
         'route_fast_edges': None,
         'mid_lat': 41.3851, # Default to Barcelona center
         'mid_lon': 2.1734, # Default to Barcelona center
-        'north': None,
-        'south': None,
-        'east': None,
-        'west': None
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -170,8 +166,6 @@ if st.sidebar.button("Find route"):
         G, edges = load_graph(f"{st.session_state.mid_lat},{st.session_state.mid_lon}", dist=int(distance/2) + 500)
         
 
-        
-
         st.session_state.G = G
         st.session_state.edges = edges
         st.session_state.noise_normalised, st.session_state.edges_projected = map_data_join(edges, gpkg_path, noise_column) #Joining normalised noise data to the edges
@@ -208,14 +202,7 @@ if st.session_state.orig is not None:
     st.metric(label="Fast Route", value=f"{len_fast/1000:.1f} km. Estimated time: {int(fast_time)} minutes")
     st.metric(label=f"Quiet Route, {k_label} mode", value=f"{len_quiet/1000:.1f} km. Estimated time: {int(quiet_time)} minutes.")
  
-# -------------- Plotting routes using Folium for interactive map ------------------
-   
-    m = folium.Map(location=[st.session_state.mid_lat, st.session_state.mid_lon], zoom_start=15, tiles="cartodbpositron")
-    m.fit_bounds(route_quiet_gdf.total_bounds[[1,0,3,2]].tolist()) #fit map to bounds of route. Reordered indices because of how fit_bounds expects them (southwest, northeast) and how total_bounds outputs them (minx, miny, maxx, maxy).
-    folium.GeoJson(st.session_state.route_fast_edges, name="Fast Route", style_function=lambda x: {'color': 'red', 'weight': 4, 'opacity': 0.7}).add_to(m)
-    folium.GeoJson(route_quiet_edges, name="Quiet Route", style_function=lambda x: {'color': 'green', 'weight': 5, 'opacity': 0.9}).add_to(m)
-    folium.LayerControl().add_to(m)
-    st_folium(m, width=700, height=500, returned_objects=[]) #returned objects means we don't have to process user interactions with the map. 
+    # ----------------------- Generating LLM Summary of Route Differences ---------------------- Summary before map as enhances UX. 
 
     if st.session_state.last_k_label != k_label or st.session_state.last_route != route_quiet: #Only call the LLM if the user has changed their preference or the quiet route. 
         # calling LLM for summary
@@ -245,6 +232,17 @@ if st.session_state.orig is not None:
         st.session_state.last_k_label = k_label
         st.session_state.last_route = route_quiet
     st.write(st.session_state.summary)
+
+# -------------- Plotting routes using Folium for interactive map ------------------
+   
+    m = folium.Map(location=[st.session_state.mid_lat, st.session_state.mid_lon], zoom_start=15, tiles="cartodbpositron")
+    m.fit_bounds(route_quiet_gdf.total_bounds[[1,0,3,2]].tolist()) #fit map to bounds of route. Reordered indices because of how fit_bounds expects them (southwest, northeast) and how total_bounds outputs them (minx, miny, maxx, maxy).
+    folium.GeoJson(route_fast_gdf, name="Fast Route", style_function=lambda x: {'color': 'red', 'weight': 4, 'opacity': 0.7}).add_to(m)
+    folium.GeoJson(route_quiet_gdf, name="Quiet Route", style_function=lambda x: {'color': 'green', 'weight': 5, 'opacity': 0.9}).add_to(m)
+    folium.LayerControl().add_to(m)
+    st_folium(m, width=700, height=500, returned_objects=[]) #returned objects means we don't have to process user interactions with the map. 
+
+    
 
 
    
