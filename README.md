@@ -1,10 +1,24 @@
-# Quiet_Routing_Engine
-An app for finding the quietest feasible route through a city or otherwise. For those who want to take the scenic route. 
+# Quiet_Routing_Engine - An app for finding the quietest feasible route through a city.
+Starting with Barcelona - I am using real reported data from OpenData BCN, having initially tried road categories as a proxy for noise data. 
+The app completes a spatial join of the noise data available with an OSMNX graph, whose size is determined based on user input. 
+It then maps the fastest route and the quietest route available, and the LLM returns a summary of the route based on data generated in the script. 
 
-Starting with Barcelona - I am using real reported data from OpenData BCN, 
 
-I complete a spacial join of the noise data available with an OSMNX graph, whose size is determined based on user input. 
+## Tech Stack 
+- Python, osmnx, networkx, geopandas — graph construction and spatial analysis
+- Streamlit + Folium — interactive UI and map visualisation
+- Anthropic API (Claude) — natural language route summary
+- OpenData BCN — real noise pollution data (GeoPackage)
 
-I then map the fastest route and the quietest route available, and the LLM returns a summary of the route based on data generated in the script. 
+
+## How to run it
+Live demo available at quietroutingengine.streamlit.app 
+Note this is currently a work in progress.
+
+## Methodology 
+"Noise penalties are applied exponentially via a tunable parameter k, reflecting the logarithmic nature of decibel perception."
+
+
+
 
 
