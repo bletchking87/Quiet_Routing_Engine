@@ -13,7 +13,7 @@ It then maps the fastest route and the quietest route available, and the LLM ret
 
 ## How to run it
 Live demo available at quietroutingengine.streamlit.app 
-Note this is currently a work in progress.
+Note this is currently a work in progress, and there are caching issues which I'm solving. 
 
 ## Methodology 
 "Noise penalties are applied exponentially via a tunable parameter k, reflecting the logarithmic nature of decibel perception."
