@@ -49,7 +49,6 @@ def init_session_state():#Turned into a function as had too many variables to in
         'last_route': None,
         'G': None,
         'edges': None,
-        'edges_projected': None,
         'noise_normalised': None,
         'route_fast_edges': None,
         'mid_lat': 41.3851, # Default to Barcelona center
@@ -116,7 +115,6 @@ k = mapping[k_label]
 def map_data_join(_edges, gpkg_path, noise_column):     #Have put "_edges" so that it doesn't cache edges. 
     bbox = tuple(_edges.total_bounds)
     noise_gdf = gpd.read_file(gpkg_path, layer='2017_Tramer_Mapa_Estrategic_Soroll_BCN', bbox=bbox) #Reading only the relevant subset of noise data based on the bounding box of the graph edges, to save memory and speed up processing.
-    
 
     # Coordinate Reference System (CRS) Alignment (Degrees vs Meters in different maps (OpenData BCN vs. OSMNX) need to be homogenised)
     noise_gdf = noise_gdf.to_crs(_edges.crs)
@@ -138,26 +136,20 @@ def map_data_join(_edges, gpkg_path, noise_column):     #Have put "_edges" so th
     # Converting column to floats as they're stored as strings in the GeoPackage. Added regex to find upper bound of noise range, and take only two digits.
     noise_values = pd.to_numeric(joined[noise_column].str.extract(r"- (\d+)")[0], errors='coerce').fillna(75) # Assuming 75 dB for streets without noise data, which is a conservative estimate to avoid false positives.
 
-    edges_projected['noise_values'] = noise_values
+    
     noise_normalised = (noise_values - noise_values.min()) / (noise_values.max() - noise_values.min()) # Normalising values between 0 and 1. 
-    return noise_normalised, edges_projected
+    return noise_normalised, noise_values
 
 
 
 
 # ---------------------- Applying Noise Constraints to the Edges --------------------
 
-def set_noise_constraints(noise_normalised, edges_projected, k):
-    penalty = ((1 + noise_normalised) ** k) - 1 #decibels are logarithmic, so we apply the exponent to reflect the non-linear increase in perceived noise. 
-    return edges_projected['length'] * (1+penalty) #Adding 1 to ensure the cost is always positive
-
-
 if st.session_state.noise_normalised is not None:
-    weighted_cost = set_noise_constraints(st.session_state.noise_normalised, st.session_state.edges_projected, k) #Applying the noise constraints to the edges, with the selected k value.
-    # ------------------------------------ Routing Comparison ------------------------------------
-    st.session_state.edges['weighted_cost'] = weighted_cost  #Converting back to a Series of values to push back to the graph. 
-    weights_dict = st.session_state.edges['weighted_cost'].to_dict() #Precautionary step to ensure weights are formatted such that they can be pushed back easily to graph.
-    nx.set_edge_attributes(st.session_state.G, weights_dict, 'weighted_cost') # Push scores back to the graph
+    penalty = ((1 + st.session_state.noise_normalised) ** k) - 1
+    weighted_costs = st.session_state.edges['length'] * (1 + penalty) #Applying the noise constraints to the edges, with the selected k value.
+    nx.set_edge_attributes(st.session_state.G, weighted_costs.todict(), 'weighted_costs') # Push scores back to the graph
+    st.session_state.edges['weighted_costs'] = weighted_costs #Converting back to a Series of values to push back to the graph. 
 
 
 # ------------ ROUTE MAPPING, VISUALISATION AND SUMMARY ------------- #Button block is separated to allow for faster iterations on routing. 
@@ -204,7 +196,7 @@ if st.sidebar.button("Find route"):
         st.session_state.route_fast_edges = ox.routing.route_to_gdf(st.session_state.G, st.session_state.route_fast)
 
 if st.session_state.orig is not None:
-    route_quiet = ox.shortest_path(st.session_state.G, st.session_state.orig, st.session_state.dest, weight='weighted_cost')
+    route_quiet = ox.shortest_path(st.session_state.G, st.session_state.orig, st.session_state.dest, weight='weighted_costs')
     route_quiet_edges = ox.routing.route_to_gdf(st.session_state.G, route_quiet)
 
     route_fast_gdf = st.session_state.route_fast_edges.to_crs("EPSG:4326")
