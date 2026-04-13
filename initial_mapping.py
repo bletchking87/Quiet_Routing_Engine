@@ -10,7 +10,7 @@ import folium
 from streamlit_folium import st_folium
 
 # ------------------------ SETTINGS ------------------------
-ox.settings.use_cache = True
+ox.settings.use_cache = False #Turning off caching in OSMNX to avoid issues with stale data during development. In a production environment, this should be turned on for performance.
 ox.settings.requests_timeout = 300
 client = anthropic.Anthropic()
 
