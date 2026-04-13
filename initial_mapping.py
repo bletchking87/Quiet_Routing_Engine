@@ -50,6 +50,7 @@ def init_session_state():#Turned into a function as had too many variables to in
         'G': None,
         'edges': None,
         'noise_normalised': None,
+        'edges_with_noise': None,
         'route_fast_edges': None,
         'mid_lat': 41.3851, # Default to Barcelona center
         'mid_lon': 2.1734, # Default to Barcelona center
@@ -113,19 +114,23 @@ k = mapping[k_label]
 # ------------- Joining the GeoPackage noise data with the OSMNX data -------------
 @st.cache_data
 def map_data_join(_edges, gpkg_path, noise_column):     #Have put "_edges" so that it doesn't cache edges. 
-    bbox = tuple(_edges.total_bounds)
+    bcn_crs = "EPSG:25831" # UTM Zone 31N, used by OSMNX for Barcelona. Need to convert noise data to same CRS for spatial join.
+    edges_with_noise = _edges.to_crs(bcn_crs)
+    bbox = tuple(edges_with_noise.total_bounds)
     noise_gdf = gpd.read_file(gpkg_path, layer='2017_Tramer_Mapa_Estrategic_Soroll_BCN', bbox=bbox) #Reading only the relevant subset of noise data based on the bounding box of the graph edges, to save memory and speed up processing.
+
 
     # Coordinate Reference System (CRS) Alignment (Degrees vs Meters in different maps (OpenData BCN vs. OSMNX) need to be homogenised)
     noise_gdf = noise_gdf.to_crs(_edges.crs)
-    bcn_crs = "EPSG:25831" # UTM Zone 31N, commonly used for Barcelona.
+    
 
-    # Spatial Join (Snapping closest noise data to the streets)
-    edges_projected = _edges.to_crs(bcn_crs)
+    
+    
     noise_projected = noise_gdf.to_crs(bcn_crs)
     
+    # Spatial Join (Snapping closest noise data to the streets)
     joined = gpd.sjoin_nearest(
-        edges_projected, 
+        edges_with_noise, 
         noise_projected, 
         how="left", 
         distance_col="dist" 
@@ -133,17 +138,18 @@ def map_data_join(_edges, gpkg_path, noise_column):     #Have put "_edges" so th
 
     joined = joined[~joined.index.duplicated(keep='first')] 
     
+
     # Converting column to floats as they're stored as strings in the GeoPackage. Added regex to find upper bound of noise range, and take only two digits.
     noise_values = pd.to_numeric(joined[noise_column].str.extract(r"- (\d+)")[0], errors='coerce').fillna(75) # Assuming 75 dB for streets without noise data, which is a conservative estimate to avoid false positives.
-
     
+    edges_with_noise = _edges.copy()#Creating a copy of the original edges GeoDataFrame to avoid modifying it directly, which can cause issues with caching and data integrity in Streamlit.
+    edges_with_noise['noise_values'] = noise_values
     noise_normalised = (noise_values - noise_values.min()) / (noise_values.max() - noise_values.min()) # Normalising values between 0 and 1. 
-    return noise_normalised, noise_values
 
 
+    st.write(st.session_state.edges['length'].describe())
+    return noise_normalised, noise_values, edges_with_noise
 
-
-# ---------------------- Applying Noise Constraints to the Edges --------------------
 
 
 
@@ -184,8 +190,8 @@ if st.sidebar.button("Find route"):
 
         st.session_state.G = G
         st.session_state.edges = edges
-        st.session_state.noise_normalised, st.session_state.edges_projected = map_data_join(edges, gpkg_path, noise_column) #Joining normalised noise data to the edges
-
+        st.session_state.noise_normalised, noise_values, st.session_state.edges_with_noise = map_data_join(edges, gpkg_path, noise_column) #Joining normalised noise data to the edges
+        st.write(st.session_state.edges_with_noise['noise_values'].value_counts())
         st.session_state.orig = ox.distance.nearest_nodes(st.session_state.G, X=start_point[1], Y=start_point[0])    
         st.session_state.dest = ox.distance.nearest_nodes(st.session_state.G, X=end_point[1], Y=end_point[0])
         st.session_state.route_fast = ox.shortest_path(st.session_state.G, st.session_state.orig, st.session_state.dest, weight='length')
@@ -211,8 +217,8 @@ if st.session_state.orig is not None:
     fast_road_names = st.session_state.route_fast_edges['name'].explode().unique().tolist()
     main_roads_avoided = [road for road in fast_road_names if road not in quiet_road_names and road is not None and isinstance(road, str)] #Some roads have no names.
     
-    fast_noise = st.session_state.edges_projected.loc[st.session_state.route_fast_edges.index, 'noise_values'].mean().round() 
-    quiet_noise = st.session_state.edges_projected.loc[route_quiet_edges.index, 'noise_values'].mean().round()
+    fast_noise = st.session_state.edges_with_noise.loc[st.session_state.route_fast_edges.index, 'noise_values'].mean().round() 
+    quiet_noise = st.session_state.edges_with_noise.loc[route_quiet_edges.index, 'noise_values'].mean().round()
 
 
     len_fast = st.session_state.route_fast_edges['length'].sum()
